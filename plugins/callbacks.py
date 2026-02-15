@@ -6,6 +6,7 @@ from constant import buttom, msg
 from modules import appx_master
 from config import Config
 import json
+import asyncio
 import traceback
 
 # ============================================================
@@ -205,7 +206,8 @@ async def cb_stats(bot: Client, query: CallbackQuery):
     try:
         user_id = query.from_user.id
         course_id = query.data.replace("stats_", "")
-        await master_buttom.get_batch_statistics(bot, user_id, course_id)
+        stats_text = await master_buttom.get_batch_statistics(bot, user_id, course_id)
+        await query.message.edit_text(stats_text)
     except Exception as e:
         print(f"Error in stats_: {e}")
         traceback.print_exc()
@@ -297,6 +299,65 @@ async def cb_home(bot: Client, query: CallbackQuery):
         )
     except Exception as e:
         print(f"Error in home: {e}")
+        traceback.print_exc()
+        await query.answer(f"⚠️ Error: {e}", show_alert=True)
+
+
+@Client.on_callback_query(filters.regex("^help$"))
+async def cb_help(bot: Client, query: CallbackQuery):
+    """Help button callback"""
+    try:
+        await query.message.edit_text(
+            msg.HELP.format(Config.USERLINK),
+            reply_markup=await buttom.help_keyboard()
+        )
+    except Exception as e:
+        print(f"Error in help: {e}")
+        traceback.print_exc()
+        await query.answer(f"⚠️ Error: {e}", show_alert=True)
+
+
+@Client.on_callback_query(filters.regex("^legal$"))
+async def cb_legal(bot: Client, query: CallbackQuery):
+    """Legal disclaimer callback"""
+    try:
+        await query.message.edit_text(
+            msg.DISCLAIMER,
+            reply_markup=await buttom.contact()
+        )
+    except Exception as e:
+        print(f"Error in legal: {e}")
+        traceback.print_exc()
+        await query.answer(f"⚠️ Error: {e}", show_alert=True)
+
+
+@Client.on_callback_query(filters.regex("^schedule_"))
+async def cb_schedule(bot: Client, query: CallbackQuery):
+    """Handle schedule update callback - schedule_<course_id>"""
+    try:
+        course_id = query.data.replace("schedule_", "")
+        await query.message.edit_text(msg.SCHEDULE_TIME)
+        # Listen for new time input
+        input_msg = await bot.listen(query.message.chat.id, timeout=120)
+        new_time = input_msg.text.strip()
+        if new_time.lower() == "no":
+            new_time = None
+        else:
+            # Validate HH:MM format
+            try:
+                h, mi = new_time.split(":")
+                int(h)
+                int(mi)
+            except:
+                await bot.send_message(query.message.chat.id, msg.INVALID_TIME_FORMAT)
+                return
+        from master.database import db_instance
+        await db_instance.update_batch_schedule(query.from_user.id, course_id, new_time)
+        await bot.send_message(query.message.chat.id, msg.BATCH_UPDATED)
+    except asyncio.TimeoutError:
+        await bot.send_message(query.message.chat.id, "<b>⏰ Timeout! Please try again.</b>")
+    except Exception as e:
+        print(f"Error in schedule_: {e}")
         traceback.print_exc()
         await query.answer(f"⚠️ Error: {e}", show_alert=True)
 
