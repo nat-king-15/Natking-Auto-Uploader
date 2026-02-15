@@ -1,41 +1,58 @@
 from pyrogram import Client, filters
-from pyrogram.types import CallbackQuery, InlineKeyboardMarkup
+from pyrogram.types import CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 from master import key as master_key
 from master import buttom as master_buttom
+from constant import buttom, msg
+from modules import appx_master
 from config import Config
 import json
 import traceback
 
-# Bridge plugin: connects inline button callbacks to compiled .so handlers
+# ============================================================
+# COMPLETE CALLBACK HANDLER BRIDGE
+# Based on deep analysis of ALL compiled .so modules
+# ============================================================
 #
-# master.buttom signatures:
-#   show_all_batches_buttom(user_id) -> returns keyboard markup
-#   show_all_batches_buttom_delete(user_id) -> returns keyboard markup
-#   show_all_batches_buttom_manage(user_id) -> returns keyboard markup
-#   delete_batch(bot, user_id, course_id)
-#   manage_batch(bot, m, course_id)
-#   get_batch_statistics(bot, user_id, course_id)
+# master.buttom function signatures:
+#   show_all_batches_buttom(user_id) -> returns list of buttons 
+#   show_all_batches_buttom_delete(user_id) -> returns list of buttons
+#   show_all_batches_buttom_manage(user_id) -> returns list of buttons
+#   delete_batch(bot, user_id, course_id) -> handles deletion
+#   manage_batch(bot, m, course_id) -> handles management
+#   get_batch_statistics(bot, user_id, course_id) -> handles stats
 #
-# master.key signatures:
-#   handle_app_paid(bot, data, call_msg, a)
-#   appx_page_paid(call_msg, letter, page)
-#   gen_alpha_paid_kb() -> returns keyboard
-#   gen_apps_paid_kb(letter, page, apps_per_page)
+# master.key function signatures:
+#   handle_app_paid(bot, data, call_msg, a) -> handles app selection
+#   appx_page_paid(call_msg, letter, page) -> handles pagination
+#   gen_alpha_paid_kb() -> returns alphabet keyboard
+#   gen_apps_paid_kb(letter, page, apps_per_page) -> returns apps keyboard
+#   get_appx_api() -> fetches api data
+#
+# modules.appx_master function signatures:
+#   add_batch(bot, m, api, app_name) -> multi-step batch add flow
+#   password_login(email, password, api) -> login with password
+#   otp_login(phNum, api, editable, bot, m) -> OTP login
+#   set_chat(bot, GROUP_ID, editable1) -> set group chat
+#   collect_data(batch_id, api, token) -> collect data from API
+#   process_batch_upload(bot, course_id, all_data) -> process upload
+# ============================================================
 
+
+# ---------- BATCH LIST BUTTONS (return keyboard markup) ----------
 
 @Client.on_callback_query(filters.regex("^appxlist$"))
 async def cb_appxlist(bot: Client, query: CallbackQuery):
-    """ADD Batch button - shows all batches for selection"""
+    """ADD Batch - show apps for selection via master.key"""
     try:
-        user_id = query.from_user.id
-        result = await master_buttom.show_all_batches_buttom(user_id)
-        if result:
-            if isinstance(result, InlineKeyboardMarkup):
-                await query.message.edit_reply_markup(reply_markup=result)
-            else:
-                await query.message.edit_text(str(result))
+        # Show alphabet keyboard for app selection
+        kb = await master_key.gen_alpha_paid_kb()
+        if kb:
+            await query.message.edit_text(
+                msg.APP,
+                reply_markup=kb
+            )
         else:
-            await query.answer("No batches found.", show_alert=True)
+            await query.answer("No apps found.", show_alert=True)
     except Exception as e:
         print(f"Error in appxlist: {e}")
         traceback.print_exc()
@@ -44,15 +61,24 @@ async def cb_appxlist(bot: Client, query: CallbackQuery):
 
 @Client.on_callback_query(filters.regex("^delete_batch$"))
 async def cb_delete_batch(bot: Client, query: CallbackQuery):
-    """Delete Batch button - shows batches for deletion"""
+    """Delete Batch - show batches for deletion"""
     try:
         user_id = query.from_user.id
-        result = await master_buttom.show_all_batches_buttom_delete(user_id)
-        if result:
-            if isinstance(result, InlineKeyboardMarkup):
-                await query.message.edit_reply_markup(reply_markup=result)
+        buttons = await master_buttom.show_all_batches_buttom_delete(user_id)
+        if buttons:
+            if isinstance(buttons, InlineKeyboardMarkup):
+                await query.message.edit_text(
+                    "<b>➣━━━━━ 🗑️ DELETE BATCH ━━━━━➣</b>\n\nSelect a batch to delete:",
+                    reply_markup=buttons
+                )
+            elif isinstance(buttons, list):
+                kb = InlineKeyboardMarkup([[btn] for btn in buttons] + [[InlineKeyboardButton("❌ Close ❌", callback_data="close")]])
+                await query.message.edit_text(
+                    "<b>➣━━━━━ 🗑️ DELETE BATCH ━━━━━➣</b>\n\nSelect a batch to delete:",
+                    reply_markup=kb
+                )
             else:
-                await query.message.edit_text(str(result))
+                await query.message.edit_text(str(buttons))
         else:
             await query.answer("No batches found.", show_alert=True)
     except Exception as e:
@@ -62,16 +88,25 @@ async def cb_delete_batch(bot: Client, query: CallbackQuery):
 
 
 @Client.on_callback_query(filters.regex("^manage_batch$"))
-async def cb_manage_batch(bot: Client, query: CallbackQuery):
-    """Manage Batch button - shows batches for management"""
+async def cb_manage_batch_list(bot: Client, query: CallbackQuery):
+    """Manage Batch - show batches for management"""
     try:
         user_id = query.from_user.id
-        result = await master_buttom.show_all_batches_buttom_manage(user_id)
-        if result:
-            if isinstance(result, InlineKeyboardMarkup):
-                await query.message.edit_reply_markup(reply_markup=result)
+        buttons = await master_buttom.show_all_batches_buttom_manage(user_id)
+        if buttons:
+            if isinstance(buttons, InlineKeyboardMarkup):
+                await query.message.edit_text(
+                    "<b>➣━━━━━ ⚙️ MANAGE BATCH ━━━━━➣</b>\n\nSelect a batch to manage:",
+                    reply_markup=buttons
+                )
+            elif isinstance(buttons, list):
+                kb = InlineKeyboardMarkup([[btn] for btn in buttons] + [[InlineKeyboardButton("❌ Close ❌", callback_data="close")]])
+                await query.message.edit_text(
+                    "<b>➣━━━━━ ⚙️ MANAGE BATCH ━━━━━➣</b>\n\nSelect a batch to manage:",
+                    reply_markup=kb
+                )
             else:
-                await query.message.edit_text(str(result))
+                await query.message.edit_text(str(buttons))
         else:
             await query.answer("No batches found.", show_alert=True)
     except Exception as e:
@@ -81,16 +116,25 @@ async def cb_manage_batch(bot: Client, query: CallbackQuery):
 
 
 @Client.on_callback_query(filters.regex("^show_batch$"))
-async def cb_show_batch(bot: Client, query: CallbackQuery):
-    """Show Batch button - shows batch statistics"""
+async def cb_show_batch_list(bot: Client, query: CallbackQuery):
+    """Show Batch - show batches for statistics"""
     try:
         user_id = query.from_user.id
-        result = await master_buttom.show_all_batches_buttom(user_id)
-        if result:
-            if isinstance(result, InlineKeyboardMarkup):
-                await query.message.edit_reply_markup(reply_markup=result)
+        buttons = await master_buttom.show_all_batches_buttom(user_id)
+        if buttons:
+            if isinstance(buttons, InlineKeyboardMarkup):
+                await query.message.edit_text(
+                    "<b>➣━━━━━ 📊 SHOW BATCH ━━━━━➣</b>\n\nSelect a batch to view stats:",
+                    reply_markup=buttons
+                )
+            elif isinstance(buttons, list):
+                kb = InlineKeyboardMarkup([[btn] for btn in buttons] + [[InlineKeyboardButton("❌ Close ❌", callback_data="close")]])
+                await query.message.edit_text(
+                    "<b>➣━━━━━ 📊 SHOW BATCH ━━━━━➣</b>\n\nSelect a batch to view stats:",
+                    reply_markup=kb
+                )
             else:
-                await query.message.edit_text(str(result))
+                await query.message.edit_text(str(buttons))
         else:
             await query.answer("No batches found.", show_alert=True)
     except Exception as e:
@@ -98,6 +142,8 @@ async def cb_show_batch(bot: Client, query: CallbackQuery):
         traceback.print_exc()
         await query.answer(f"⚠️ Error: {e}", show_alert=True)
 
+
+# ---------- CLOSE ----------
 
 @Client.on_callback_query(filters.regex("^close$"))
 async def cb_close(bot: Client, query: CallbackQuery):
@@ -108,6 +154,8 @@ async def cb_close(bot: Client, query: CallbackQuery):
         await query.answer("⚠️ Could not close.", show_alert=True)
 
 
+# ---------- SPECIFIC BATCH ACTIONS ----------
+
 @Client.on_callback_query(filters.regex("^del_"))
 async def cb_del_specific(bot: Client, query: CallbackQuery):
     """Handle specific batch deletion - del_<course_id>"""
@@ -115,6 +163,12 @@ async def cb_del_specific(bot: Client, query: CallbackQuery):
         user_id = query.from_user.id
         course_id = query.data.replace("del_", "")
         await master_buttom.delete_batch(bot, user_id, course_id)
+        await query.answer("✅ Batch deleted!", show_alert=True)
+        # Refresh the message
+        try:
+            await query.message.delete()
+        except:
+            pass
     except Exception as e:
         print(f"Error in del_: {e}")
         traceback.print_exc()
@@ -158,17 +212,25 @@ async def cb_stats(bot: Client, query: CallbackQuery):
         await query.answer(f"⚠️ Error: {e}", show_alert=True)
 
 
+# ---------- APP PAID / APPX HANDLERS (master.key) ----------
+
 @Client.on_callback_query(filters.regex("^app_paid"))
 async def cb_app_paid(bot: Client, query: CallbackQuery):
-    """Handle app paid callback - app_paid data contains JSON"""
+    """Handle app paid callback - app_paid:<json_data>"""
     try:
-        data = query.data
-        # Try to parse JSON from callback data
+        raw = query.data
+        # Parse data - format could be app_paid:<json> or app_paid_<data>
+        if ":" in raw:
+            data_str = raw.split(":", 1)[1]
+        else:
+            data_str = raw.replace("app_paid_", "").replace("app_paid", "")
+        
         try:
-            parsed = json.loads(data.replace("app_paid", "").strip())
+            data = json.loads(data_str)
         except:
-            parsed = data
-        await master_key.handle_app_paid(bot, parsed, query.message, query)
+            data = data_str
+        
+        await master_key.handle_app_paid(bot, data, query.message, query)
     except Exception as e:
         print(f"Error in app_paid: {e}")
         traceback.print_exc()
@@ -205,7 +267,7 @@ async def cb_page_action(bot: Client, query: CallbackQuery):
 
 @Client.on_callback_query(filters.regex("^alpha_"))
 async def cb_alpha_action(bot: Client, query: CallbackQuery):
-    """Handle alphabet selection callbacks"""
+    """Handle alphabet selection callbacks - alpha_<letter>"""
     try:
         parts = query.data.split("_")
         letter = parts[1] if len(parts) > 1 else ""
@@ -215,3 +277,34 @@ async def cb_alpha_action(bot: Client, query: CallbackQuery):
         print(f"Error in alpha_: {e}")
         traceback.print_exc()
         await query.answer(f"⚠️ Error: {e}", show_alert=True)
+
+
+# ---------- HOME / BACK BUTTON ----------
+
+@Client.on_callback_query(filters.regex("^home$"))
+async def cb_home(bot: Client, query: CallbackQuery):
+    """Go back to home/start screen"""
+    try:
+        from master.utils import send_random_photo
+        user_mention = query.from_user.mention
+        photo = await send_random_photo()
+        await query.message.delete()
+        await bot.send_photo(
+            query.message.chat.id,
+            photo=photo,
+            caption=msg.START.format(user_mention, Config.USERLINK),
+            reply_markup=await buttom.home()
+        )
+    except Exception as e:
+        print(f"Error in home: {e}")
+        traceback.print_exc()
+        await query.answer(f"⚠️ Error: {e}", show_alert=True)
+
+
+# ---------- CATCH-ALL FOR UNKNOWN CALLBACKS ----------
+
+@Client.on_callback_query()
+async def cb_unknown(bot: Client, query: CallbackQuery):
+    """Catch any unhandled callbacks - prevents silent failures"""
+    print(f"⚠️ Unhandled callback: {query.data}")
+    await query.answer(f"⚠️ Unknown action: {query.data}", show_alert=False)
