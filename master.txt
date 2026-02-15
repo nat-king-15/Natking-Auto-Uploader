@@ -15,5 +15,5 @@ m3u8
 psutil
 httpx
 Pillow
-Flask==1.1.2
+Flask>=3.0.0
 gunicorn==20.1.0
