@@ -30,7 +30,13 @@ def fix_keyboard(markup):
 async def start_msg(bot, m):
     try:
         user_mention = m.from_user.mention
-        await bot.send_photo(m.chat.id,photo=await send_random_photo(),caption=msg.START.format(user_mention, Config.USERLINK), reply_markup=fix_keyboard(buttom.home()))
+        caption = msg.START.format(user_mention, Config.USERLINK)
+        kb = fix_keyboard(buttom.home())
+        photo = await send_random_photo()
+        if photo:
+            await bot.send_photo(m.chat.id, photo=photo, caption=caption, reply_markup=kb)
+        else:
+            await m.reply_text(caption, reply_markup=kb, disable_web_page_preview=True)
     except Exception as e:
         await m.reply_text(f"⚠️ Error: {e}")
 
@@ -38,7 +44,13 @@ async def start_msg(bot, m):
 @bot.on_message(filters.command("help") & filters.private)
 async def help_msg(bot, m):
     try:
-        await bot.send_photo(m.chat.id,photo=await send_random_photo(),caption=msg.HELP.format(Config.USERLINK), reply_markup=fix_keyboard(buttom.help_keyboard()))
+        caption = msg.HELP.format(Config.USERLINK)
+        kb = fix_keyboard(buttom.help_keyboard())
+        photo = await send_random_photo()
+        if photo:
+            await bot.send_photo(m.chat.id, photo=photo, caption=caption, reply_markup=kb)
+        else:
+            await m.reply_text(caption, reply_markup=kb, disable_web_page_preview=True)
     except Exception as e:
         await m.reply_text(f"⚠️ Error: {e}")
 

@@ -41,18 +41,24 @@ async def decrypt_link(link):
 
 
 async def send_random_photo():
+    """Return a random photo URL for bot messages.
+    Returns None if no valid photos are configured.
+    To add your own photos, upload images to telegra.ph and add URLs below.
+    """
     regex_photo = [
-        "https://telegra.ph/file/5ec5fa5f69fa7e2b39bba.jpg",
-        "https://telegra.ph/file/f8c8f4e6e089e2b3a3f3a.jpg",
-        "https://telegra.ph/file/d6f2b1f0a8b8e5e5a5a5a.jpg",
+        # Add your own telegra.ph image URLs here, e.g.:
+        # "https://telegra.ph/file/your-real-image-id.jpg",
     ]
+    if not regex_photo:
+        return None
     pht = random.choice(regex_photo)
     try:
-        url = pht
-        response = await scraper.get(url)
-        return pht
+        response = await scraper.get(pht)
+        if response.status_code == 200:
+            return pht
+        return None
     except:
-        return pht
+        return None
 
 
 async def unpad(padded_data, block_size, style='pkcs7'):

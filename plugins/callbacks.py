@@ -291,12 +291,23 @@ async def cb_home(bot: Client, query: CallbackQuery):
         user_mention = query.from_user.mention
         photo = await send_random_photo()
         await query.message.delete()
-        await bot.send_photo(
-            query.message.chat.id,
-            photo=photo,
-            caption=msg.START.format(user_mention, Config.USERLINK),
-            reply_markup=buttom.home()
-        )
+        caption = msg.START.format(user_mention, Config.USERLINK)
+        kb = buttom.home()
+        
+        if photo:
+            await bot.send_photo(
+                query.message.chat.id,
+                photo=photo,
+                caption=caption,
+                reply_markup=kb
+            )
+        else:
+            await bot.send_message(
+                query.message.chat.id,
+                text=caption,
+                reply_markup=kb,
+                disable_web_page_preview=True
+            )
     except Exception as e:
         print(f"Error in home: {e}")
         traceback.print_exc()
