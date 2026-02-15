@@ -295,7 +295,7 @@ async def cb_home(bot: Client, query: CallbackQuery):
             query.message.chat.id,
             photo=photo,
             caption=msg.START.format(user_mention, Config.USERLINK),
-            reply_markup=await buttom.home()
+            reply_markup=buttom.home()
         )
     except Exception as e:
         print(f"Error in home: {e}")
@@ -309,7 +309,7 @@ async def cb_help(bot: Client, query: CallbackQuery):
     try:
         await query.message.edit_text(
             msg.HELP.format(Config.USERLINK),
-            reply_markup=await buttom.help_keyboard()
+            reply_markup=buttom.help_keyboard()
         )
     except Exception as e:
         print(f"Error in help: {e}")
@@ -323,7 +323,7 @@ async def cb_legal(bot: Client, query: CallbackQuery):
     try:
         await query.message.edit_text(
             msg.DISCLAIMER,
-            reply_markup=await buttom.contact()
+            reply_markup=buttom.contact()
         )
     except Exception as e:
         print(f"Error in legal: {e}")

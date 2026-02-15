@@ -6,7 +6,7 @@ from pyrogram.types import InlineKeyboardButton as KB, InlineKeyboardMarkup as K
 from config import Config
 
 
-async def contact():
+def contact():
     """Contact/support keyboard."""
     keyboard = KM([
         [KB("📞 Contact Admin", url=Config.USERLINK)],
@@ -16,7 +16,7 @@ async def contact():
     return keyboard
 
 
-async def help_keyboard():
+def help_keyboard():
     """Help menu keyboard."""
     keyboard = KM([
         [KB("📱 Add Batch", callback_data="appxlist")],
@@ -29,7 +29,7 @@ async def help_keyboard():
     return keyboard
 
 
-async def home():
+def home():
     """Home/start screen keyboard."""
     keyboard = KM([
         [KB("📱 Add Batch", callback_data="appxlist")],
@@ -41,7 +41,7 @@ async def home():
     return keyboard
 
 
-async def yt_keyboard(watchurl, downloadurl):
+def yt_keyboard(watchurl, downloadurl):
     """YouTube video action keyboard."""
     keyboard = KM([
         [KB("▶️ Watch", url=watchurl)],

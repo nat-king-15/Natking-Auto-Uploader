@@ -30,7 +30,7 @@ def fix_keyboard(markup):
 async def start_msg(bot, m):
     try:
         user_mention = m.from_user.mention
-        await bot.send_photo(m.chat.id,photo=await send_random_photo(),caption=msg.START.format(user_mention, Config.USERLINK), reply_markup=fix_keyboard(await buttom.home()))
+        await bot.send_photo(m.chat.id,photo=await send_random_photo(),caption=msg.START.format(user_mention, Config.USERLINK), reply_markup=fix_keyboard(buttom.home()))
     except Exception as e:
         await m.reply_text(f"⚠️ Error: {e}")
 
@@ -38,7 +38,7 @@ async def start_msg(bot, m):
 @bot.on_message(filters.command("help") & filters.private)
 async def help_msg(bot, m):
     try:
-        await bot.send_photo(m.chat.id,photo=await send_random_photo(),caption=msg.HELP.format(Config.USERLINK), reply_markup=fix_keyboard(await buttom.help_keyboard()))
+        await bot.send_photo(m.chat.id,photo=await send_random_photo(),caption=msg.HELP.format(Config.USERLINK), reply_markup=fix_keyboard(buttom.help_keyboard()))
     except Exception as e:
         await m.reply_text(f"⚠️ Error: {e}")
 
@@ -60,7 +60,7 @@ async def restart_handler(_, m):
 @bot.on_message(filters.command("legal") & filters.private)
 async def legal_disclaimer(_, m):
     try:
-        await m.reply_text(msg.DISCLAIMER,disable_web_page_preview=True,reply_markup=fix_keyboard(await buttom.contact()))
+        await m.reply_text(msg.DISCLAIMER,disable_web_page_preview=True,reply_markup=fix_keyboard(buttom.contact()))
     except Exception as e:
         await m.reply_text(f"⚠️ Error: {e}")
 

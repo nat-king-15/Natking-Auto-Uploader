@@ -86,7 +86,7 @@ async def process_batch_upload(bot, course_id, all_data):
                     yt_video_id = await helper.get_youtube_video_id(url)
                     if yt_video_id:
                         from constant.buttom import yt_keyboard
-                        kb = await yt_keyboard(
+                        kb = yt_keyboard(
                             f"https://www.youtube.com/watch?v={yt_video_id}",
                             f"https://www.youtube.com/watch?v={yt_video_id}"
                         )
