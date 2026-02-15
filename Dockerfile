@@ -10,10 +10,10 @@ RUN apt-get update && \
     ffmpeg \
     aria2 \
     && rm -rf /var/lib/apt/lists/*
-RUN wget https://www.masterapi.tech/get/linux/pkg/download/appxdl
-RUN mv appxdl /usr/local/bin/appxdl
+COPY appxdl /usr/local/bin/appxdl
 RUN chmod +x /usr/local/bin/appxdl
 RUN python3 -m venv /venv && \
-    /venv/bin/pip install -r master.txt
+    /venv/bin/pip install -r master.txt && \
+    /venv/bin/pip install yt-dlp
 ENV PATH="/usr/local/bin:/venv/bin:$PATH"
 CMD gunicorn main:app --bind 0.0.0.0:$PORT & python3 main.py
