@@ -1,19 +1,21 @@
 from pyrogram import Client, filters
 from pyrogram.types import CallbackQuery
 from master import key as master_key
-from modules import appx_master
+from master import buttom as master_buttom
 from config import Config
 import traceback
 
 # Bridge plugin: connects inline button callbacks to compiled .so handlers
+# master.buttom has: delete_batch, manage_batch, show_all_batches_buttom,
+#   show_all_batches_buttom_delete, show_all_batches_buttom_manage, get_batch_statistics
+# master.key has: handle_app_paid, appx_page_paid, gen_apps_paid_kb, gen_alpha_paid_kb
 
-##Code Written By @ItsMeMaster - Handler bridge
 
 @Client.on_callback_query(filters.regex("^appxlist$"))
 async def cb_appxlist(bot: Client, query: CallbackQuery):
     """ADD Batch button - shows batch list for adding"""
     try:
-        await master_key.show_all_batches_buttom(bot, query)
+        await master_buttom.show_all_batches_buttom(bot, query)
     except Exception as e:
         print(f"Error in appxlist: {e}")
         traceback.print_exc()
@@ -24,7 +26,7 @@ async def cb_appxlist(bot: Client, query: CallbackQuery):
 async def cb_delete_batch(bot: Client, query: CallbackQuery):
     """Delete Batch button"""
     try:
-        await master_key.show_all_batches_buttom_delete(bot, query)
+        await master_buttom.show_all_batches_buttom_delete(bot, query)
     except Exception as e:
         print(f"Error in delete_batch: {e}")
         traceback.print_exc()
@@ -35,7 +37,7 @@ async def cb_delete_batch(bot: Client, query: CallbackQuery):
 async def cb_manage_batch(bot: Client, query: CallbackQuery):
     """Manage Batch button"""
     try:
-        await master_key.show_all_batches_buttom_manage(bot, query)
+        await master_buttom.show_all_batches_buttom_manage(bot, query)
     except Exception as e:
         print(f"Error in manage_batch: {e}")
         traceback.print_exc()
@@ -46,7 +48,7 @@ async def cb_manage_batch(bot: Client, query: CallbackQuery):
 async def cb_show_batch(bot: Client, query: CallbackQuery):
     """Show Batch button"""
     try:
-        await master_key.get_batch_statistics(bot, query)
+        await master_buttom.get_batch_statistics(bot, query)
     except Exception as e:
         print(f"Error in show_batch: {e}")
         traceback.print_exc()
@@ -66,7 +68,7 @@ async def cb_close(bot: Client, query: CallbackQuery):
 async def cb_del_specific(bot: Client, query: CallbackQuery):
     """Handle specific batch deletion"""
     try:
-        await master_key.delete_batch(bot, query)
+        await master_buttom.delete_batch(bot, query)
     except Exception as e:
         print(f"Error in del_: {e}")
         traceback.print_exc()
@@ -77,7 +79,7 @@ async def cb_del_specific(bot: Client, query: CallbackQuery):
 async def cb_manage_specific(bot: Client, query: CallbackQuery):
     """Handle specific batch management"""
     try:
-        await master_key.manage_batch(bot, query)
+        await master_buttom.manage_batch(bot, query)
     except Exception as e:
         print(f"Error in manage_: {e}")
         traceback.print_exc()
@@ -88,7 +90,7 @@ async def cb_manage_specific(bot: Client, query: CallbackQuery):
 async def cb_batch_action(bot: Client, query: CallbackQuery):
     """Handle batch-related callbacks"""
     try:
-        await master_key.manage_batch(bot, query)
+        await master_buttom.manage_batch(bot, query)
     except Exception as e:
         print(f"Error in batch_: {e}")
         traceback.print_exc()
@@ -106,7 +108,7 @@ async def cb_app_paid(bot: Client, query: CallbackQuery):
         await query.answer(f"⚠️ Error: {e}", show_alert=True)
 
 
-@Client.on_callback_query(filters.regex("^appx_"))  
+@Client.on_callback_query(filters.regex("^appx_"))
 async def cb_appx_action(bot: Client, query: CallbackQuery):
     """Handle appx-related callbacks"""
     try:
@@ -132,7 +134,7 @@ async def cb_page_action(bot: Client, query: CallbackQuery):
 async def cb_stats(bot: Client, query: CallbackQuery):
     """Handle stats callbacks"""
     try:
-        await master_key.get_batch_statistics(bot, query)
+        await master_buttom.get_batch_statistics(bot, query)
     except Exception as e:
         print(f"Error in stats_: {e}")
         traceback.print_exc()
