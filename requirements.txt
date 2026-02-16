@@ -13,3 +13,4 @@ httpx
 pycryptodome
 cloudscraper
 beautifulsoup4
+pyromod
