@@ -130,10 +130,24 @@ async def set_chat(bot, GROUP_ID, editable1):
         return False
 
 
+from modules import appxdata, apnaex_extractor
+
+# ... (rest of imports are same)
+
+# ... (check_server, get_user_id, password_login, otp_login, timezone, set_chat functions remain same)
+
 async def collect_data(batch_id, api, token):
-    """Collect all content data from a batch."""
+    """Collect all content data from a batch using NEW ApnaEx logic."""
     try:
-        all_urls = await appxdata.collect_data(batch_id, api, token)
+        LOGGER.info(f"Starting extraction for batch {batch_id} using ApnaEx logic...")
+        # 1. Try new ApnaEx extraction logic
+        all_urls = await apnaex_extractor.extract_batch_apnaex_logic(batch_id, api, token)
+        
+        # 2. Fallback to old logic if new logic returns nothing (optional, can be removed if confident)
+        if not all_urls:
+            LOGGER.warning("ApnaEx logic returned no data. Falling back to legacy appxdata...")
+            all_urls = await appxdata.collect_data(batch_id, api, token)
+            
         return all_urls
     except Exception as e:
         LOGGER.error(f"Error collecting data: {e}")

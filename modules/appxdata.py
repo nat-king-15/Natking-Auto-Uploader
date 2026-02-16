@@ -3,16 +3,31 @@ modules/appxdata.py - Appx platform data fetching
 Reconstructed from appxdata.so analysis
 """
 import asyncio
-import requests
 from logger import LOGGER
+from master.server import HttpxClient
 from master import utils
 
-# HttpxClient removed in favor of requests to fix 401/500 errors
+scraper = HttpxClient(verify_ssl=False)
+semaphore = asyncio.Semaphore(36)
+
+headers = {
+    'User-Agent': 'okhttp/4.9.1',
+    'Accept-Encoding': 'gzip',
+    'client-service': 'Appx',
+    'auth-key': 'appxapi',
+    'source': 'website',
+    'user-id': '',
+    'authorization': '',
+    'user_app_category': '',
+    'language': 'en',
+    'device_type': 'ANDROID'
+}
+
 
 async def check_server():
     """Check if the Appx server is reachable."""
     try:
-        response = await asyncio.to_thread(requests.get, "https://www.google.com", verify=False)
+        response = await scraper.get("https://www.google.com")
         if response.status_code == 200:
             LOGGER.info("Server check: Online")
             return True
@@ -25,40 +40,24 @@ async def check_server():
 async def collect_data(batch_id, api, token):
     """Collect all data (videos, PDFs) from a batch."""
     try:
-        # Construct headers dynamically
-        headers = {
-            'User-Agent': 'okhttp/4.9.1',
-            'Accept-Encoding': 'gzip',
-            'client-service': 'Appx',
-            'auth-key': 'appxapi',
-            'source': 'website',
-            'authorization': token.replace("Bearer ", "") if token else '',
-            'language': 'en',
-            # 'device_type': 'ANDROID' # Removed as per successful debug
-        }
-        
-        # Extract user-id from token if possible, or leave empty if not critical for v2/v3
-        # In debug_api_requests, we saw user-id was needed or helpful
-        # But here we don't have easy access to get_user_id (it's in appx_master)
-        # However, 'authorization' header might be enough for v2/v3 folder endpoints
-        
-        all_urls = await fetch_appx_v1(api, batch_id, headers)
+        all_urls = await fetch_appx_v1(api, batch_id)
         if not all_urls:
-            all_urls = await fetch_appx_v2(api, batch_id, headers=headers)
+            all_urls = await fetch_appx_v2(api, batch_id)
         return all_urls
     except Exception as e:
         LOGGER.error(f"Error collecting data: {e}")
         return []
 
 
-async def fetch_appx_v1(api, batch_id, headers):
+async def fetch_appx_v1(api, batch_id):
     """Fetch data using Appx API v1 (subject/topic hierarchy)."""
     try:
+        tasks = []
         all_urls = []
 
         # Get all subjects for the course
         subject_url = f"{api}/get/allsubjectfrmlivecourseclass?courseid={batch_id}"
-        subject_resp = await asyncio.to_thread(requests.get, subject_url, headers=headers, verify=False)
+        subject_resp = await scraper.get(subject_url, headers=headers)
 
         if subject_resp.status_code != 200:
             return []
@@ -73,7 +72,7 @@ async def fetch_appx_v1(api, batch_id, headers):
 
             # Get topics for each subject
             topic_url = f"{api}/get/alltopicfrmlivecourseclass?courseid={batch_id}&subjectid={u}"
-            topic_resp = await asyncio.to_thread(requests.get, topic_url, headers=headers, verify=False)
+            topic_resp = await scraper.get(topic_url, headers=headers)
 
             if topic_resp.status_code != 200:
                 continue
@@ -87,7 +86,7 @@ async def fetch_appx_v1(api, batch_id, headers):
                 TopicName = Topic.get("topic_name", Topic.get("name", "Unknown Topic"))
 
                 # Get content details for each topic
-                ids_details = await fetch_details(api, v, TopicName, SubjectName, headers)
+                ids_details = await fetch_details(semaphore, api, v, TopicName, SubjectName)
                 all_urls.extend(ids_details)
 
         return all_urls
@@ -96,17 +95,18 @@ async def fetch_appx_v1(api, batch_id, headers):
         return []
 
 
-async def fetch_appx_v2(api, Batch_id, u=-1, TopicName=None, SubjectName=None, headers=None):
+async def fetch_appx_v2(api, Batch_id, u=-1, TopicName=None, SubjectName=None):
     """Fetch data using Appx API v2 (folder-based structure)."""
     try:
         all_urls = []
+        tasks = []
 
         # Use folder_contentsv2 endpoint
         content_url = f"{api}/get/folder_contentsv2?course_id={Batch_id}&start=-1"
         if u != -1:
             content_url = f"{api}/get/folder_contentsv2?course_id={Batch_id}&start={u}"
 
-        res = await asyncio.to_thread(requests.get, content_url, headers=headers, verify=False)
+        res = await scraper.get(content_url, headers=headers)
 
         if res.status_code != 200:
             return []
@@ -123,11 +123,10 @@ async def fetch_appx_v2(api, Batch_id, u=-1, TopicName=None, SubjectName=None, h
                 # Recursively fetch folder contents
                 sub_items = await fetch_appx_v2(api, Batch_id, r,
                     item.get("topic_name", TopicName),
-                    item.get("subject_name", SubjectName),
-                    headers=headers)
+                    item.get("subject_name", SubjectName))
                 all_urls.extend(sub_items)
             elif folder_wise_course == "VIDEO":
-                url = await get_video_url(api, item, headers)
+                url = await get_video_url(api, item)
                 if url:
                     all_urls.append({
                         "url": url,
@@ -157,77 +156,77 @@ async def fetch_appx_v2(api, Batch_id, u=-1, TopicName=None, SubjectName=None, h
         return []
 
 
-async def fetch_details(api, i, topicName=None, subjectName=None, headers=None):
+async def fetch_details(semaphore, api, i, topicName=None, subjectName=None):
     """Fetch content details for a specific topic."""
-    
-    try:
-        all_data = []
+    async with semaphore:
+        try:
+            all_data = []
 
-        # Use v3 API endpoint
-        content_url = f"{api}/get/livecourseclassbycoursesubtopconceptapiv3?courseid={i}"
-        res = await asyncio.to_thread(requests.get, content_url, headers=headers, verify=False)
+            # Use v3 API endpoint
+            content_url = f"{api}/get/livecourseclassbycoursesubtopconceptapiv3?courseid={i}"
+            res = await scraper.get(content_url, headers=headers)
 
-        if res.status_code != 200:
-            return []
+            if res.status_code != 200:
+                return []
 
-        items = res.json()
-        if isinstance(items, dict):
-            items = items.get("data", [])
+            items = res.json()
+            if isinstance(items, dict):
+                items = items.get("data", [])
 
-        for j in items:
-            MTYPE = j.get("contentType", j.get("type", j.get("folder_wise_course", "")))
-            name = j.get("topic_name", j.get("name", j.get("title", "")))
+            for j in items:
+                MTYPE = j.get("contentType", j.get("type", j.get("folder_wise_course", "")))
+                name = j.get("topic_name", j.get("name", j.get("title", "")))
 
-            if MTYPE in ["video", "Video", "VIDEO"]:
-                video_url = await get_video_url(api, j, headers)
-                if video_url:
-                    all_data.append({
-                        "url": video_url,
-                        "name": name,
-                        "type": "video",
-                        "topicName": topicName if topicName else "",
-                        "subjectName": subjectName if subjectName else "",
-                        "timestamp": j.get("strtotime", j.get("createdAt", j.get("startDate", "")))
-                    })
-            else:
-                # PDF/document handling
-                pdf_key = None
-                for key in ["file_link", "fileUrl", "url", "link"]:
-                    if key in j:
-                        pdf_key = key
-                        break
-
-                if pdf_key:
-                    pdf_link = j.get(pdf_key, "")
-
-                    # Check for encrypted links
-                    if pdf_link and j.get("_encrypted", False):
-                        try:
-                            xx = await utils.decrypt_link(pdf_link)
-                            if xx:
-                                pdf_link = xx
-                        except:
-                            pass
-
-                    if pdf_link:
-                        pdf_version = j.get("_encryption_version", j.get("pdf_version", "v1"))
+                if MTYPE in ["video", "Video", "VIDEO"]:
+                    video_url = await get_video_url(api, j)
+                    if video_url:
                         all_data.append({
-                            "url": pdf_link,
+                            "url": video_url,
                             "name": name,
-                            "type": "pdf",
-                            "is_pdf": True,
+                            "type": "video",
                             "topicName": topicName if topicName else "",
                             "subjectName": subjectName if subjectName else "",
                             "timestamp": j.get("strtotime", j.get("createdAt", j.get("startDate", "")))
                         })
+                else:
+                    # PDF/document handling
+                    pdf_key = None
+                    for key in ["file_link", "fileUrl", "url", "link"]:
+                        if key in j:
+                            pdf_key = key
+                            break
 
-        return all_data
-    except Exception as e:
-        LOGGER.error(f"Error in fetch_details: {e}")
-        return []
+                    if pdf_key:
+                        pdf_link = j.get(pdf_key, "")
+
+                        # Check for encrypted links
+                        if pdf_link and j.get("_encrypted", False):
+                            try:
+                                xx = await utils.decrypt_link(pdf_link)
+                                if xx:
+                                    pdf_link = xx
+                            except:
+                                pass
+
+                        if pdf_link:
+                            pdf_version = j.get("_encryption_version", j.get("pdf_version", "v1"))
+                            all_data.append({
+                                "url": pdf_link,
+                                "name": name,
+                                "type": "pdf",
+                                "is_pdf": True,
+                                "topicName": topicName if topicName else "",
+                                "subjectName": subjectName if subjectName else "",
+                                "timestamp": j.get("strtotime", j.get("createdAt", j.get("startDate", "")))
+                            })
+
+            return all_data
+        except Exception as e:
+            LOGGER.error(f"Error in fetch_details: {e}")
+            return []
 
 
-async def get_video_url(api, i, headers=None):
+async def get_video_url(api, i):
     """Get the actual video URL from content item or ID."""
     try:
         # i can be a dict (item) or a string (id)
@@ -238,7 +237,7 @@ async def get_video_url(api, i, headers=None):
 
         querystring = {"id": video_id}
         video_url = f"{api}/get/fetchVideoDetailsById"
-        res = await asyncio.to_thread(requests.get, video_url, headers=headers, params=querystring, verify=False)
+        res = await scraper.get(video_url, headers=headers, params=querystring)
 
         if res.status_code != 200:
             return None
