@@ -184,12 +184,49 @@ async def add_batch(bot, m, api, app_name):
         
         # Step 2: Fetch and display batches
         try:
-            hdr = {**headers, 'authorization': f'Bearer {token}', 'user-id': str(userid) if userid else ''}
-            res2 = await scraper.get(f"{api}/get/mycoursev2?userid={userid}", headers=hdr)
-            bdetail = res2.json()
+            # Use requests compatible headers
+            import requests
+            hdr = {
+                'User-Agent': 'okhttp/4.9.1',
+                'Accept-Encoding': 'gzip', 
+                'client-service': 'Appx',
+                'auth-key': 'appxapi',
+                'source': 'website',
+                'user-id': str(userid) if userid else '',
+                'authorization': token.replace("Bearer ", "") if token else '',
+                'language': 'en',
+                # 'device_type': 'ANDROID' # Removed to match successful debug script
+            }
+            
+            bdetail = None # Initialize bdetail
+            
+            # Try v2 first
+            try:
+                res2 = await asyncio.to_thread(requests.get, f"{api}/get/mycoursev2?userid={userid}", headers=hdr, verify=False)
+                if res2.status_code == 200:
+                    bdetail = res2.json()
+                else:
+                    bdetail = None
+            except Exception as e:
+                LOGGER.error(f"Error fetching mycoursev2: {e}")
+                bdetail = None
+
+            # Fallback to v1 if v2 fails or has no data
+            if not bdetail or (isinstance(bdetail, dict) and not bdetail.get('data')):
+                try:
+                    res1 = await asyncio.to_thread(requests.get, f"{api}/get/mycourse?userid={userid}", headers=hdr, verify=False)
+                    if res1.status_code == 200:
+                        bdetail = res1.json()
+                except Exception as e:
+                    LOGGER.error(f"Error fetching mycourse (v1 fallback): {e}")
+                    pass # bdetail remains None or previous value
+            
             if isinstance(bdetail, dict):
                 bdetail = bdetail.get("data", [])
-        except:
+            elif not isinstance(bdetail, list): # Ensure bdetail is a list if not already
+                bdetail = []
+        except Exception as e:
+            LOGGER.error(f"Error fetching batch details: {e}")
             bdetail = []
         
         if not bdetail:
