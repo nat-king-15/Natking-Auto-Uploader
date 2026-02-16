@@ -11,3 +11,5 @@ pymongo
 PyJWT
 httpx
 pycryptodome
+cloudscraper
+beautifulsoup4
