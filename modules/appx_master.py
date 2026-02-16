@@ -136,12 +136,16 @@ from modules import appxdata, apnaex_extractor
 
 # ... (check_server, get_user_id, password_login, otp_login, timezone, set_chat functions remain same)
 
-async def collect_data(batch_id, api, token):
+async def collect_data(batch_id, api, token, userid):
     """Collect all content data from a batch using NEW ApnaEx logic."""
     try:
         LOGGER.info(f"Starting extraction for batch {batch_id} using ApnaEx logic...")
+        
+        # Clean token for ApnaEx logic (it constructs its own headers)
+        clean_token = token.replace("Bearer ", "") if token else ""
+        
         # 1. Try new ApnaEx extraction logic
-        all_urls = await apnaex_extractor.extract_batch_apnaex_logic(batch_id, api, token)
+        all_urls = await apnaex_extractor.extract_batch_apnaex_logic(batch_id, api, clean_token, userid)
         
         # 2. Fallback to old logic if new logic returns nothing (optional, can be removed if confident)
         if not all_urls:
@@ -359,7 +363,7 @@ async def add_batch(bot, m, api, app_name):
         
         await editable1.edit_text(msg.COLLECTING_DATA)
         
-        all_data = await collect_data(bid, api, token)
+        all_data = await collect_data(bid, api, token, userid)
         
         if not all_data:
             await editable1.edit_text(msg.NO_DATA_ERROR)

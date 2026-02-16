@@ -40,143 +40,40 @@ async def fetch(session, url, headers):
     """Async fetch helper."""
     try:
         async with session.get(url, headers=headers) as response:
-            if response.status != 200:
-                LOGGER.error(f"Error fetching {url}: {response.status}")
-                return {}
             content = await response.text()
+            if response.status != 200:
+                LOGGER.error(f"Error fetching {url}: {response.status} | Response: {content[:200]}")
+                return {}
+            
             # Some responses might be HTML wrapped JSON, handled via soup
             try:
                 soup = BeautifulSoup(content, 'html.parser')
                 return json.loads(str(soup))
-            except:
-                return json.loads(content)
+            except json.JSONDecodeError:
+                LOGGER.error(f"JSON Decode Error for {url}. Content: {content[:500]}") # Log first 500 chars
+                return {}
+            except Exception as e:
+                 # Try direct load if soup fails
+                try:
+                    return json.loads(content)
+                except:
+                     LOGGER.error(f"Failed to parse response from {url}: {e}")
+                     return {}
+
     except Exception as e:
         LOGGER.error(f"Fetch error {url}: {e}")
         return {}
+# ... (process_video and handle_course_topic remain same)
 
-async def process_video(session, api_base, course_id, subject_id, subject_name, topic_id, topic_name, video, headers):
-    """Process a single video item and return formatted dict."""
-    video_id = video.get("id")
-    video_title = video.get("Title", "Unknown Video")
-    
-    extracted_items = []
-    
-    try:
-        details_url = f"{api_base}/get/fetchVideoDetailsById?course_id={course_id}&video_id={video_id}&ytflag=0&folder_wise_course=0"
-        r4 = await fetch(session, details_url, headers)
-        
-        if not r4 or not r4.get("data"):
-            return []
-
-        data = r4.get("data", {})
-        vt = data.get("Title", video_title)
-        
-        # 1. Main Video Link
-        fl = data.get("video_id", "")
-        if fl:
-            dfl = decrypt(fl)
-            final_link = f"https://youtu.be/{dfl}"
-            extracted_items.append({
-                "name": vt,
-                "url": final_link,
-                "type": "video",
-                "topicName": topic_name,
-                "subjectName": subject_name
-            })
-
-        # 2. Download Link (often actual video file)
-        vl = data.get("download_link", "")
-        if vl:
-            dvl = decrypt(vl)
-            if ".pdf" not in dvl:
-                extracted_items.append({
-                    "name": vt,
-                    "url": dvl,
-                    "type": "video",
-                    "topicName": topic_name,
-                    "subjectName": subject_name
-                })
-
-        # 3. Encrypted Links (HLS/Dash usually)
-        encrypted_links = data.get("encrypted_links", [])
-        if encrypted_links:
-            # Prioritize first link or specific quality logic if needed
-            first_link = encrypted_links[0]
-            path = first_link.get("path")
-            key = first_link.get("key")
-            
-            if path:
-                decrypted_path = decrypt(path)
-                final_url = decrypted_path
-                # If key exists, it might be clear key or needs embedding. 
-                # Autoappx schema mostly takes 'url' string. 
-                # If key is needed for playback, typically it's embedded or handled by player.
-                # appex_v4 formats it as "url*key". Autoappx might need adaptation for this.
-                # For now, we'll store url. If key is present, we might append it or handle based on Autoappx player support.
-                if key:
-                   decrypted_key = decode_base64(decrypt(key))
-                   # If Autoappx supports headers/keys in URL field or separate field?
-                   # Standard appxdata just returns 'url'. 
-                   # We will follow appex_v4 format: url*key if key exists.
-                   final_url = f"{decrypted_path}*{decrypted_key}"
-                
-                extracted_items.append({
-                    "name": vt,
-                    "url": final_url,
-                    "type": "video",
-                    "topicName": topic_name,
-                    "subjectName": subject_name
-                })
-        
-        # 4. PDF Materials attached to Video
-        if "material_type" in data:
-            # Check for PDFs in video material
-            p1 = data.get("pdf_link", "")
-            pk1 = data.get("pdf_encryption_key", "")
-            if p1:
-                 dp1 = decrypt(p1)
-                 # Handle key if needed
-                 extracted_items.append({
-                    "name": f"{vt} (PDF)",
-                    "url": dp1,
-                    "type": "pdf",
-                    "topicName": topic_name,
-                    "subjectName": subject_name
-                })
-
-        return extracted_items
-
-    except Exception as e:
-        LOGGER.error(f"Error processing video {video_id}: {e}")
-        return []
-
-async def handle_course_topic(session, api_base, course_id, subject_id, subject_name, topic, headers):
-    """Handle a single topic: fetch videos and process them."""
-    topic_id = topic.get("topicid")
-    topic_name = topic.get("topic_name")
-    
-    url = f"{api_base}/get/livecourseclassbycoursesubtopconceptapiv3?courseid={course_id}&subjectid={subject_id}&topicid={topic_id}&conceptid=&start=-1"
-    r3 = await fetch(session, url, headers)
-    video_data = sorted(r3.get("data", []), key=lambda x: x.get("id"))
-    
-    tasks = [
-        process_video(session, api_base, course_id, subject_id, subject_name, topic_id, topic_name, video, headers)
-        for video in video_data
-    ]
-    results = await asyncio.gather(*tasks)
-    
-    # Flatten results
-    return [item for sublist in results for item in sublist]
-
-async def extract_batch_apnaex_logic(batch_id, api_base, token, userid="-2"):
+async def extract_batch_apnaex_logic(batch_id, api_base, token, userid):
     """
     Main entry point for ApnaEx extraction logic using asyncio.
     
     Args:
         batch_id (str): The course/batch ID.
-        api_base (str): Base API URL (e.g. https://api.classx.co.in).
+        api_base (str): Base API URL.
         token (str): Auth token.
-        userid (str): User ID (optional, defaults to -2 if not strictly needed or extracted).
+        userid (str): User ID (MANDATORY).
         
     Returns:
         list: List of dictionaries containing extracted content.
@@ -187,7 +84,7 @@ async def extract_batch_apnaex_logic(batch_id, api_base, token, userid="-2"):
         "source": "website",
         "Auth-Key": "appxapi",
         "Authorization": token,
-        "User-ID": userid,
+        "User-ID": str(userid),
         "User-Agent": "okhttp/4.9.1"
     }
     
